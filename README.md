@@ -1,2 +1,2 @@
-# wikiservice
-Lightweight library for simple mediawiki-API requests
+# WikiService
+Lightweight python3 library for simple mediawiki-API requests
