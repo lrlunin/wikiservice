@@ -1,6 +1,5 @@
 import requests
-import urllib
-import os
+
 
 class WikiService(object):
     """docstring for WikiService."""
@@ -9,13 +8,13 @@ class WikiService(object):
     password = None
     domain = None
     api_url = None
+
     def __init__(self, username, password, domain, api_url):
         super(WikiService, self).__init__()
         self.username = username
         self.password = password
         self.domain = domain
         self.api_url = api_url
-        self.login()
 
     class WrongPasswordError(Exception):
         pass
@@ -23,121 +22,169 @@ class WikiService(object):
     class UploadError(Exception):
         pass
 
+    class CredentialsError(Exception):
+        pass
+
     class FileAlreadyExistsError(Exception):
         pass
 
     def login(self):
-         if (self.username is not None) & (self.password is not None):
-             print("Logging into wiki...")
-             self.session = requests.Session()
-             login_params = {
-             "action" : "login",
-             "lgname" : self.username,
-             "lgpassword" : self.password,
-             "lgdomain" : self.domain,
-             "format" : "json"
-             }
-             login_response = self.session.post(url = self.api_url, params = login_params)
-             login_token = login_response.json()['login']['token']
-             login_params['lgtoken'] = login_token
-             success_response = self.session.post(url = self.api_url, params = login_params)
-             if (success_response.json()['login']['result'] != "Success"):
-                 raise self.WrongPasswordError("Could not authenticate with password")
-             else:
-                 return success_response.json()['login']['result']
+        """
+        Login to wiki with in constructor given username/password/domain/url
+        @raise CredentialsError, if no user with found or fields are empty
+        @raise WrongPasswordError, if given password is wrong
+        """
+        if ((self.username is not None) & (self.username != "")) & (
+                (self.password is not None) & (self.password != "")):
+            print("Logging into wiki...")
+            self.session = requests.Session()
+            login_params = {
+                "action": "login",
+                "lgname": self.username,
+                "lgpassword": self.password,
+                "lgdomain": self.domain,
+                "format": "json"
+            }
+            login_response = self.session.post(url=self.api_url, params=login_params)
+            login_token = login_response.json().get('login').get('token')
+            if login_token is None:
+                raise self.CredentialsError
+            login_params['lgtoken'] = login_token
+            success_response = self.session.post(url=self.api_url, params=login_params)
+            if success_response.json().get('login').get('result') != "Success":
+                raise self.WrongPasswordError
+        else:
+            raise self.CredentialsError
 
     def isSessionActive(self):
+        """
+        Checks status of used session
+        @return: True, if session is active
+                 False, if session has expired
+        """
         test_params = {
-        "action" : "query",
-        "prop" : "info",
-        "titles" : "Main%20Page",
-        "format" : "json"
+            "action": "query",
+            "prop": "info",
+            "titles": "Main%20Page",
+            "format": "json"
         }
-        test_response = self.session.get(url = self.api_url, params = test_params)
-        if ("error" in test_response.json()):
-            return False
-        else:
+        test_response = self.session.get(url=self.api_url, params=test_params)
+        if test_response.json().get('error') is None:
             return True
+        else:
+            return False
 
-    def loadImage(self, filePath, uploadWithName = None, comment = None, text = None):
-        if (not self.isSessionActive()):
+    def loadImage(self, image_bytes, filename, extension, comment=None, text=None):
+        """
+        Provides to upload as byte array formatted images. Byte array should be formatted accordingly its
+        image extension
+        @param image_bytes: array of image bytes
+        @param filename: name of file without extension and dot Example: "photo23_12"
+        @param extension: any acceptable image extension in wiki-system Example: "png"
+        @param comment: supply comment for file, will be displayed in wiki
+        @param text: supply text for file, will be displayed in wiki
+        @return: full name of uploaded file Example: "photo23_12.png"
+        @raise: FileAlreadyExistsError, if the file already exists in wiki-system
+        @raise UploadError, if given data are wrong
+        """
+        if not self.isSessionActive():
             self.login()
-        if uploadWithName is None:
-            uploadWithName = os.path.basename(filePath)
+        if (filename is None) or (image_bytes is None) or (extension is None):
+            raise self.UploadError
+        filename += (".%s" % extension)
         upload_params = {
-        "action" : "upload",
-        "filename" : uploadWithName,
-        "format" : "json"
+            "action": "upload",
+            "filename": filename,
+            "format": "json"
         }
-        if (comment is not None):
+        if comment is not None:
             upload_params["comment"] = comment
-        if (text is not None):
+        if text is not None:
             upload_params["text"] = text
         upload_params["token"] = self.getEditToken()
         file = {
-        "file" : (uploadWithName, open(filePath, "rb"))
+            "file": (filename, image_bytes)
         }
-        response_upload = self.session.post(url = self.api_url, data = upload_params, files = file)
-        if ("Warning" == response_upload.json()["upload"]["result"]):
-            if ("exists" in response_upload.json()["upload"]["warnings"]):
-                raise self.FileAlreadyExistsError("File with name %s already in wiki" % uploadWithName)
-        elif ("Success" == response_upload.json()["upload"]["result"]):
-            return uploadWithName
-        #write success catch
+        response_upload = self.session.post(url=self.api_url, data=upload_params, files=file)
+        if "Warning" == response_upload.json()["upload"]["result"]:
+            if "exists" in response_upload.json()["upload"]["warnings"]:
+                raise self.FileAlreadyExistsError()
+        elif "Success" == response_upload.json()["upload"]["result"]:
+            return filename
+        # write success catch
 
-
-    def createPage(self, title, text, createOnly = True):
-        if (not self.isSessionActive()):
+    def createPage(self, title, text, create_only=True):
+        """
+        Provides to create new page with given title and text (wiki-formatted)
+        @param title: title of the new page Example: "Ludwig IV the king"
+        @param text: text of the new page Example: "He was a king"
+        @param create_only: use this attribute only when you are sure, that old page with same title should be replaced
+        """
+        if not self.isSessionActive():
             self.login()
         createPage_params = {
-        "action" : "edit",
-        "title" : title,
-        "text" : text,
-        "createOnly" : "true" if createOnly else "false",
-        "format" : "json",
-        "token" : self.getEditToken()
+            "action": "edit",
+            "title": title,
+            "text": text,
+            "createOnly": "true" if create_only else "false",
+            "format": "json",
+            "token": self.getEditToken()
         }
-        self.session.post(url = self.api_url, data = createPage_params)
+        self.session.post(url=self.api_url, data=createPage_params)
 
     def editPage(self, title, text):
-        if (not self.isSessionActive()):
+        """
+        Provides to replace old text of page with given title with new given text (wiki-formatted)
+        @param title: title of the page Example: "Ludwig IV the king"
+        @param text: new text of the page Example: "He was a great king"
+        """
+        if not self.isSessionActive():
             self.login()
         editPage_params = {
-        "action" : "edit",
-        "title" : title,
-        "text" : text,
-        "nocreate" : "true",
-        "format" : "json",
-        "token" : self.getEditToken()
+            "action": "edit",
+            "title": title,
+            "text": text,
+            "nocreate": "true",
+            "format": "json",
+            "token": self.getEditToken()
         }
-        self.session.post(url = self.api_url, data = editPage_params)
+        self.session.post(url=self.api_url, data=editPage_params)
 
     def getPageWikiText(self, title):
-        if (not self.isSessionActive()):
+        """
+        Provides to get text (wiki-formatted) of page with given title
+        @param title: title of page Example: "Ludwig IV the king"
+        @return: text (wiki-formatted) Example: "He was a great king"
+        """
+        if not self.isSessionActive():
             self.login()
         getWikiText_params = {
-        "action" : "parse",
-        "prop" : "wikitext",
-        "page" : title,
-        "format" : "json"
+            "action": "parse",
+            "prop": "wikitext",
+            "page": title,
+            "format": "json"
         }
-        wikiText_response = self.session.get(url = self.api_url, params = getWikiText_params)
-        if ("error" in wikiText_response.json()):
+        wikiText_response = self.session.get(url=self.api_url, params=getWikiText_params)
+        if "error" in wikiText_response.json():
             return None
         else:
-            wikiText = wikiText_response.json()["parse"]["wikitext"]
+            wikiText = wikiText_response.json().get('parse').get('wikitext')
             return wikiText
 
     def getEditToken(self):
-        if (not self.isSessionActive()):
+        """
+        Provides to get a token, that requires for any edits in wiki-engine
+        @return: token as string (already formatted)
+        """
+        if not self.isSessionActive():
             self.login()
         getToken_params = {
-        "action" : "query",
-        "prop": "info",
-        "intoken": "edit",
-        "format": "json",
-        "titles" : "Main_Page"
+            "action": "query",
+            "prop": "info",
+            "intoken": "edit",
+            "format": "json",
+            "titles": "Main_Page"
         }
-        token_response = self.session.get(url = self.api_url, params = getToken_params)
-        csrf_token = token_response.json()["query"]["pages"]["1"]["edittoken"]
+        token_response = self.session.get(url=self.api_url, params=getToken_params)
+        csrf_token = token_response.json().get('query').get('pages').get('1').get('edittoken')
         return csrf_token
