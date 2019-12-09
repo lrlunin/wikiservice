@@ -60,7 +60,7 @@ class WikiService(object):
         """
         Checks status of used session
         @return: True, if session is active
-                 False, if session has expired
+                 False, if session has expired or wasn't created
         """
         test_params = {
             "action": "query",
@@ -68,6 +68,8 @@ class WikiService(object):
             "titles": "Main%20Page",
             "format": "json"
         }
+        if self.session is None:
+            return False
         test_response = self.session.get(url=self.api_url, params=test_params)
         if test_response.json().get('error') is None:
             return True
@@ -188,3 +190,15 @@ class WikiService(object):
         token_response = self.session.get(url=self.api_url, params=getToken_params)
         csrf_token = token_response.json().get('query').get('pages').get('1').get('edittoken')
         return csrf_token
+
+    def logout(self):
+        """
+        Provides to logout from current user-session
+        """
+        if self.isSessionActive():
+            logout_params = {
+                "action": "logout",
+                "format": "json"
+            }
+            self.session.get(url=self.api_url, params=logout_params)
+            self.session = None
