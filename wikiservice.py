@@ -28,6 +28,9 @@ class WikiService(object):
     class FileAlreadyExistsError(Exception):
         pass
 
+    class PageAlreadyExistsError(Exception):
+        pass
+
     def login(self):
         """
         Login to wiki with in constructor given username/password/domain/url
@@ -121,6 +124,7 @@ class WikiService(object):
         @param title: title of the new page Example: "Ludwig IV the king"
         @param text: text of the new page Example: "He was a king"
         @param create_only: use this attribute only when you are sure, that old page with same title should be replaced
+        @raise PageAlreadyExistsError, if page with given name already exits
         """
         if not self.isSessionActive():
             self.login()
@@ -128,11 +132,13 @@ class WikiService(object):
             "action": "edit",
             "title": title,
             "text": text,
-            "createOnly": "true" if create_only else "false",
+            "createonly": "true" if create_only else "false",
             "format": "json",
             "token": self.getEditToken()
         }
-        self.session.post(url=self.api_url, data=createPage_params)
+        createPage_response = self.session.post(url=self.api_url, data=createPage_params).json()
+        if createPage_response.get('error').get('code') == 'articleexists':
+            raise self.PageAlreadyExistsError
 
     def editPage(self, title, text):
         """
