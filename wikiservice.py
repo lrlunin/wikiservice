@@ -118,12 +118,12 @@ class WikiService(object):
             return filename
         # write success catch
 
-    def createPage(self, title, text, create_only=True):
+    def createPage(self, title, text):
         """
-        Provides to create new page with given title and text (wiki-formatted)
+        Provides to create new page with given title and text (wiki-formatted). Cannot delete or edit page,
+        if it was already created
         @param title: title of the new page Example: "Ludwig IV the king"
         @param text: text of the new page Example: "He was a king"
-        @param create_only: use this attribute only when you are sure, that old page with same title should be replaced
         @raise PageAlreadyExistsError, if page with given name already exits
         """
         if not self.isSessionActive():
@@ -132,7 +132,7 @@ class WikiService(object):
             "action": "edit",
             "title": title,
             "text": text,
-            "createonly": "true" if create_only else "false",
+            "createonly": "true",
             "format": "json",
             "token": self.getEditToken()
         }
