@@ -1,7 +1,7 @@
 import requests
 
 
-class WikiService(object):
+class WikiAPIService(object):
     """docstring for WikiService."""
     session = None
     username = None
@@ -10,7 +10,7 @@ class WikiService(object):
     api_url = None
 
     def __init__(self, username, password, domain, api_url):
-        super(WikiService, self).__init__()
+        super(WikiAPIService, self).__init__()
         self.username = username
         self.password = password
         self.domain = domain
@@ -39,7 +39,6 @@ class WikiService(object):
         """
         if ((self.username is not None) & (self.username != "")) & (
                 (self.password is not None) & (self.password != "")):
-            print("Logging into wiki...")
             self.session = requests.Session()
             login_params = {
                 "action": "login",
