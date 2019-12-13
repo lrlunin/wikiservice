@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="wikiservice",
-    version="0.1",
+    version="0.1.1",
     author="Leonid Lunin",
     author_email="lunin.leonid@gmail.com",
     description="Lightweight library to work with MediaWiki-API",
