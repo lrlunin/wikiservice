@@ -136,8 +136,9 @@ class WikiAPIService(object):
             "token": self.getEditToken()
         }
         createPage_response = self.session.post(url=self.api_url, data=createPage_params).json()
-        if createPage_response.get('error').get('code') == 'articleexists':
-            raise self.PageAlreadyExistsError
+        if createPage_response.get('error') is not None:
+            if createPage_response.get('error').get('code') == 'articleexists':
+                raise self.PageAlreadyExistsError
 
     def editPage(self, title, text):
         """
